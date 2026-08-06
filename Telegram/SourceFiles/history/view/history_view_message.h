@@ -255,6 +255,7 @@ public:
 	int minWidthForMedia() const override;
 	bool displayRightActionComments() const;
 	std::optional<QSize> rightActionSize() const override;
+	bool displayViewAction() const override;
 	void drawRightAction(
 		Painter &p,
 		const PaintContext &context,
@@ -262,6 +263,8 @@ public:
 		int top,
 		int outerWidth) const override;
 	[[nodiscard]] ClickHandlerPtr rightActionLink(
+		std::optional<QPoint> pressPoint) const override;
+	[[nodiscard]] ClickHandlerPtr viewActionLink(
 		std::optional<QPoint> pressPoint) const override;
 	[[nodiscard]] TimeId displayedEditDate() const override;
 	[[nodiscard]] bool toggleSelectionByHandlerClick(
@@ -349,6 +352,8 @@ private:
 
 	void toggleRightActionRipple(bool pressed);
 	void toggleBadgeRipple(bool pressed);
+	void toggleViewActionRipple(bool pressed);
+	[[nodiscard]] int rightActionsExtraWidth() const;
 
 	void toggleReplyRipple(bool pressed);
 	void toggleSummaryHeaderRipple(bool pressed);

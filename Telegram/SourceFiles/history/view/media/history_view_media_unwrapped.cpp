@@ -404,7 +404,12 @@ void UnwrappedMedia::drawSurrounding(
 			fullRight,
 			*rightActionSize);
 		const auto outer = 2 * inner.x() + inner.width();
-		_parent->drawRightAction(p, context, position.x(), position.y(), outer);
+		_parent->drawRightAction(
+			p,
+			context,
+			position.x(),
+			position.y(),
+			outer);
 	}
 }
 
@@ -600,8 +605,19 @@ TextState UnwrappedMedia::textState(QPoint point, StateRequest request) const {
 				fullBottom,
 				fullRight,
 				*rightActionSize);
-			if (QRect(position.x(), position.y(), rightActionSize->width(), rightActionSize->height()).contains(point)) {
+			const auto fastShareRect = QRect(
+				position.x(),
+				position.y(),
+				rightActionSize->width(),
+				rightActionSize->height());
+			if (fastShareRect.contains(point)) {
 				result.link = _parent->rightActionLink(point - position);
+				return result;
+			}
+			const auto viewRect = _parent->viewActionRect(fastShareRect);
+			if (viewRect && viewRect->contains(point)) {
+				result.link = _parent->viewActionLink(
+					point - viewRect->topLeft());
 				return result;
 			}
 		}
@@ -688,7 +704,8 @@ int UnwrappedMedia::calculateFullRight(const QRect &inner) const {
 			: st::msgPadding.right());
 	const auto rightActionWidth = rightActionSize
 		? (st::historyFastShareLeft * 2
-			+ rightActionSize->width())
+			+ _parent->rightActionGroupWidth()
+			- _parent->rightActionMargin())
 		: 0;
 	auto fullRight = inner.x()
 		+ inner.width()
@@ -721,7 +738,8 @@ QPoint UnwrappedMedia::calculateFastActionPosition(
 			- size.width()
 			- st::historyFastShareLeft)
 		: ((doesRightActionHitReply ? replyRight : fullRight)
-			+ st::historyFastShareLeft);
+			+ st::historyFastShareLeft
+			- _parent->rightActionMargin());
 	return QPoint(fastShareLeft, fastShareTop);
 }
 

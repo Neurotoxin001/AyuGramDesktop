@@ -249,6 +249,7 @@ ChatStyle::ChatStyle(rpl::producer<ColorIndicesCompressed> colorIndices) {
 	make(_msgBotKbCopyIcon, st::msgBotKbCopyIcon);
 	make(_historyFastCommentsIcon, st::historyFastCommentsIcon);
 	make(_historyFastShareIcon, st::historyFastShareIcon);
+	make(_historyFastShareViewIcon, st::historyFastShareViewIcon);
 	make(_historyFastTranscribeIcon, st::historyFastTranscribeIcon);
 	make(_historyFastTranscribeLock, st::historyFastTranscribeLock);
 	make(_historyGoToOriginalIcon, st::historyGoToOriginalIcon);

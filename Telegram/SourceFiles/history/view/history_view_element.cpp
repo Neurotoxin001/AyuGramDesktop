@@ -2733,6 +2733,38 @@ std::optional<QSize> Element::rightActionSize() const {
 	return std::nullopt;
 }
 
+bool Element::displayViewAction() const {
+	return false;
+}
+
+int Element::rightActionGroupWidth() const {
+	const auto size = rightActionSize();
+	if (!size) {
+		return 0;
+	}
+	return size->width() + (displayViewAction()
+		? st::historyFastShareLeft + size->width()
+		: 0);
+}
+
+int Element::rightActionMargin() const {
+	if (!displayViewAction() || hasRightLayout()) {
+		return 0;
+	}
+	return delegate()->elementIsChatWide()
+		? st::historyRightActionsMarginWide
+		: st::historyRightActionsMargin;
+}
+
+std::optional<QRect> Element::viewActionRect(
+		const QRect &primary) const {
+	if (!displayViewAction()) {
+		return std::nullopt;
+	}
+	const auto shift = primary.width() + st::historyFastShareLeft;
+	return primary.translated(hasRightLayout() ? -shift : shift, 0);
+}
+
 void Element::drawRightAction(
 	Painter &p,
 	const PaintContext &context,
@@ -2746,6 +2778,10 @@ ClickHandlerPtr Element::rightActionLink(
 	return ClickHandlerPtr();
 }
 
+ClickHandlerPtr Element::viewActionLink(
+		std::optional<QPoint> pressPoint) const {
+	return ClickHandlerPtr();
+}
 TimeId Element::displayedEditDate() const {
 	return TimeId(0);
 }

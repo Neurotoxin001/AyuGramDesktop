@@ -676,6 +676,12 @@ void BuildOther(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.getter = &AyuSettings::disableAds,
 		.setter = &AyuSettings::setDisableAds,
 	});
+	ayu.addSettingToggle({
+		.id = u"ayu/showHideButtonNearPosts"_q,
+		.title = tr::ayu_ShowNearPosts(),
+		.getter = &AyuSettings::showHideButtonNearPosts,
+		.setter = &AyuSettings::setShowHideButtonNearPosts,
+	});
 }
 
 const auto kMeta = BuildHelper({

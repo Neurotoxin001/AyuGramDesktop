@@ -115,6 +115,9 @@ public:
 	[[nodiscard]] rpl::producer<> messageShotSelectionRequest() const {
 		return _messageShotSelection.events();
 	}
+	[[nodiscard]] rpl::producer<> hideSelectionRequest() const {
+		return _hideSelection.events();
+	}
 	[[nodiscard]] rpl::producer<> clearSelectionRequest() const {
 		return _clearSelection.events();
 	}
@@ -227,13 +230,14 @@ private:
 	bool _canDelete = false;
 	bool _canForward = false;
 	bool _canSendNow = false;
+	bool _canHide = false;
 	bool _searchMode = false;
 
 	Ui::Animations::Simple _selectedShown;
 	Ui::Animations::Simple _searchShown;
 
 	object_ptr<Ui::RoundButton> _clear;
-	object_ptr<Ui::RoundButton> _forward, _sendNow, _delete, _messageShot;
+	object_ptr<Ui::RoundButton> _forward, _sendNow, _delete, _messageShot, _hide;
 	object_ptr<Ui::InputField> _searchField = { nullptr };
 	object_ptr<Ui::FadeWrapScaled<Ui::IconButton>> _chooseFromUser
 		= { nullptr };
@@ -246,6 +250,7 @@ private:
 	rpl::event_stream<> _jumpToDateRequests;
 	rpl::event_stream<> _chooseFromUserRequests;
 	rpl::event_stream<bool> _searchModeChanges;
+	rpl::event_stream<> _hideSelection;
 
 	object_ptr<Ui::IconButton> _back;
 	object_ptr<Ui::IconButton> _cancelChoose;

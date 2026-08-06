@@ -101,6 +101,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 // AyuGram includes
 #include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/utils/telegram_helpers.h"
+#include "ayu/ayu_settings.h"
 
 
 namespace HistoryView {
@@ -563,7 +564,9 @@ ListWidget::ListWidget(
 		_session->changes().peerUpdates(
 			Data::PeerUpdate::Flag::IsBlocked
 		) | rpl::to_empty,
-		FiltersCacheController::updates()
+		FiltersCacheController::updates(),
+		AyuSettings::getInstance().showHideButtonNearPostsChanges(
+		) | rpl::to_empty
 	) | rpl::on_next([=] {
 		crl::on_main(this, [=] {
 			if (_viewsCapacity.empty()) {

@@ -410,6 +410,7 @@ public:
 	Dialogs::UnreadState chatListUnreadState() const override;
 	Dialogs::BadgesState chatListBadgesState() const override;
 	HistoryItem *chatListMessage() const override;
+	[[nodiscard]] HistoryItem *chatListDisplayMessage() const;
 	bool chatListMessageKnown() const override;
 	const QString &chatListName() const override;
 	const QString &chatListNameSortKey() const override;

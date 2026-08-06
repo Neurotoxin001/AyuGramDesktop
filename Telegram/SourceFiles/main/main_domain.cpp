@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "main/main_domain.h"
 
+#include "ayu/ayu_state.h"
 #include "core/application.h"
 #include "core/core_settings.h"
 #include "core/shortcuts.h"
@@ -135,6 +136,7 @@ void Domain::activateAfterStarting() {
 		}
 		watchSession(account.get());
 	}
+	AyuState::migrateLegacy();
 
 	activate(toActivate);
 	removePasscodeIfEmpty();

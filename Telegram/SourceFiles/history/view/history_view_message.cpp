@@ -71,6 +71,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
+#include "ayu/ayu_state.h"
+#include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/message_shot/message_shot.h"
 #include "styles/style_ayu_icons.h"
@@ -504,6 +506,9 @@ struct Message::RightAction {
 	ClickHandlerPtr link;
 	QPoint lastPoint;
 	std::unique_ptr<SecondRightAction> second;
+	std::unique_ptr<Ui::RippleAnimation> viewRipple;
+	ClickHandlerPtr viewLink;
+	QPoint viewLastPoint;
 };
 
 struct Message::LinkRipple {
@@ -2120,38 +2125,32 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 			}
 		}
 		ensureSummarizeButton();
-		if (const auto size = rightActionSize(); size || _summarize) {
-			const auto rightActionWidth = size
-				? size->width()
-				: _summarize->size().width();
-			const auto fastShareSkip = size
-				? std::clamp(
-					(g.height() - size->height()) / 2,
-					0,
-					st::historyFastShareBottom)
-				: st::historyFastShareBottom;
+		if (const auto size = rightActionSize()) {
+			const auto fastShareSkip = std::clamp(
+				(g.height() - size->height()) / 2,
+				0,
+				st::historyFastShareBottom);
 			const auto fastShareLeft = hasRightLayout()
-				? (g.left()
-					- (_summarize ? 0 : rightActionWidth)
-					- st::historyFastShareLeft)
-				: (g.left() + g.width() + st::historyFastShareLeft);
-			const auto fastShareTop = g.top() + (data()->isSponsored()
-				? fastShareSkip
-				: g.height() - fastShareSkip - (size ? size->height() : 0));
-			if (size) {
-				const auto o = p.opacity();
-				if (selectionModeResult.progress > 0) {
-					p.setOpacity(1. - selectionModeResult.progress);
-				}
-				drawRightAction(
-					p,
-					context,
-					fastShareLeft,
-					fastShareTop,
-					width());
-				if (selectionModeResult.progress > 0) {
-					p.setOpacity(o);
-				}
+				? (g.left() - size->width() - st::historyFastShareLeft)
+				: (g.left()
+					+ g.width()
+					+ st::historyFastShareLeft
+					- rightActionMargin());
+			const auto fastShareTop = data()->isSponsored()
+				? g.top() + fastShareSkip
+				: g.top() + g.height() - fastShareSkip - size->height();
+			const auto o = p.opacity();
+			if (selectionModeResult.progress > 0) {
+				p.setOpacity(1. - selectionModeResult.progress);
+			}
+			drawRightAction(
+				p,
+				context,
+				fastShareLeft,
+				fastShareTop,
+				width());
+			if (selectionModeResult.progress > 0) {
+				p.setOpacity(o);
 			}
 			if (_summarize) {
 				paintSummarize(
@@ -2162,6 +2161,20 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 					context,
 					g);
 			}
+		} else if (_summarize) {
+			const auto fastShareLeft = hasRightLayout()
+				? (g.left() - st::historyFastShareLeft)
+				: (g.left() + g.width() + st::historyFastShareLeft);
+			const auto fastShareTop = g.top()
+				+ g.height()
+				- st::historyFastShareBottom;
+			paintSummarize(
+				p,
+				fastShareLeft,
+				fastShareTop,
+				!context.outbg,
+				context,
+				g);
 		}
 
 		if (media) {
@@ -2233,7 +2246,7 @@ void Message::draw(Painter &p, const PaintContext &context) const {
 		const auto outerWidth = st::historySwipeIconSkip
 			+ (isLeftSize ? rect::right(g) : width())
 			+ ((g.height() < size * kMaxHeightRatio)
-				? rightActionSize().value_or(QSize()).width()
+				? rightActionGroupWidth()
 				: 0);
 		const auto shift = std::min(
 			(size * kShiftRatio * context.gestureHorizontal.ratio),
@@ -3362,6 +3375,8 @@ void Message::clickHandlerPressedChanged(
 		return;
 	} else if (_rightAction && (handler == _rightAction->link)) {
 		toggleRightActionRipple(pressed);
+	} else if (_rightAction && (handler == _rightAction->viewLink)) {
+		toggleViewActionRipple(pressed);
 	} else if (_rightAction
 		&& _rightAction->second
 		&& (handler == _rightAction->second->link)) {
@@ -3518,6 +3533,25 @@ void Message::toggleBadgeRipple(bool pressed) {
 		badge->ripple->add(badge->lastPoint);
 	} else if (badge->ripple) {
 		badge->ripple->lastStop();
+	}
+}
+
+void Message::toggleViewActionRipple(bool pressed) {
+	Expects(_rightAction != nullptr);
+
+	const auto rightSize = rightActionSize();
+	Assert(rightSize != std::nullopt);
+
+	if (pressed) {
+		if (!_rightAction->viewRipple) {
+			_rightAction->viewRipple = std::make_unique<Ui::RippleAnimation>(
+				st::defaultRippleAnimation,
+				Ui::RippleAnimation::RoundRectMask(*rightSize, rightSize->width() / 2),
+				[=] { repaint(); });
+		}
+		_rightAction->viewRipple->add(_rightAction->viewLastPoint);
+	} else if (_rightAction->viewRipple) {
+		_rightAction->viewRipple->lastStop();
 	}
 }
 
@@ -4112,18 +4146,26 @@ TextState Message::textState(
 				st::historyFastShareBottom);
 			const auto fastShareLeft = hasRightLayout()
 				? (g.left() - size->width() - st::historyFastShareLeft)
-				: (g.left() + g.width() + st::historyFastShareLeft);
+				: (g.left()
+					+ g.width()
+					+ st::historyFastShareLeft
+					- rightActionMargin());
 			const auto fastShareTop = data()->isSponsored()
 				? g.top() + fastShareSkip
 				: g.top() + g.height() - fastShareSkip - size->height();
-			if (QRect(
+			const auto fastShareRect = QRect(
 				fastShareLeft,
 				fastShareTop,
 				size->width(),
-				size->height()
-			).contains(point)) {
+				size->height());
+			if (fastShareRect.contains(point)) {
 				result.link = rightActionLink(point
 					- QPoint(fastShareLeft, fastShareTop));
+			} else {
+				const auto viewRect = viewActionRect(fastShareRect);
+				if (viewRect && viewRect->contains(point)) {
+					result.link = viewActionLink(point - viewRect->topLeft());
+				}
 			}
 		}
 		if (_summarize && _summarize->contains(point)) {
@@ -5441,6 +5483,13 @@ void Message::refreshDataIdHook() {
 	if (_rightAction && base::take(_rightAction->link)) {
 		_rightAction->link = rightActionLink(_rightAction->lastPoint);
 	}
+	if (displayViewAction()
+		&& _rightAction
+		&& base::take(_rightAction->viewLink)) {
+		_rightAction->viewLink = viewActionLink(_rightAction->viewLastPoint);
+	} else if (_rightAction) {
+		_rightAction->viewLink = nullptr;
+	}
 	if (base::take(_fastReplyLink)) {
 		_fastReplyLink = fastReplyLink();
 	}
@@ -5867,6 +5916,19 @@ std::optional<QSize> Message::rightActionSize() const {
 		: std::optional<QSize>();
 }
 
+bool Message::displayViewAction() const {
+	return AyuSettings::getInstance().showHideButtonNearPosts();
+}
+
+int Message::rightActionsExtraWidth() const {
+	return std::max(
+		st::historyFastShareLeft
+			+ rightActionGroupWidth()
+			- rightActionMargin()
+			- st::msgMargin.right(),
+		0);
+}
+
 bool Message::displayFastShare() const {
 	const auto &settings = AyuSettings::getInstance();
 	if (settings.hideFastShare()) {
@@ -5920,6 +5982,8 @@ void Message::drawRightAction(
 
 	const auto size = rightActionSize();
 	const auto st = context.st;
+	const auto primaryRect = QRect(QPoint(left, top), *size);
+	const auto viewRect = viewActionRect(primaryRect);
 
 	if (_rightAction->ripple) {
 		const auto &stm = context.messageStyle();
@@ -5933,6 +5997,21 @@ void Message::drawRightAction(
 		if (_rightAction->ripple->empty()) {
 			_rightAction->ripple.reset();
 		}
+	}
+	if (viewRect && _rightAction->viewRipple) {
+		const auto &stm = context.messageStyle();
+		const auto colorOverride = &stm->msgWaveformInactive->c;
+		_rightAction->viewRipple->paint(
+			p,
+			viewRect->x(),
+			viewRect->y(),
+			viewRect->width(),
+			colorOverride);
+		if (_rightAction->viewRipple->empty()) {
+			_rightAction->viewRipple.reset();
+		}
+	} else if (!viewRect) {
+		_rightAction->viewRipple.reset();
 	}
 	if (_rightAction->second && _rightAction->second->ripple) {
 		const auto &stm = context.messageStyle();
@@ -5957,6 +6036,21 @@ void Message::drawRightAction(
 			top,
 			size->width(),
 			size->height(),
+			outerWidth);
+		const auto usual = st::historyFastShareSize;
+		if (size->width() == size->height() && size->width() == usual) {
+			p.drawEllipse(rect);
+		} else {
+			p.drawRoundedRect(rect, usual / 2, usual / 2);
+		}
+	}
+	if (viewRect) {
+		PainterHighQualityEnabler hq(p);
+		const auto rect = style::rtlrect(
+			viewRect->x(),
+			viewRect->y(),
+			viewRect->width(),
+			viewRect->height(),
 			outerWidth);
 		const auto usual = st::historyFastShareSize;
 		if (size->width() == size->height() && size->width() == usual) {
@@ -6001,6 +6095,12 @@ void Message::drawRightAction(
 			: st->historyGoToOriginalIcon();
 		icon.paintInCenter(p, Rect(left, top, *size));
 	}
+	if (viewRect) {
+		const auto &viewIcon = st->historyFastShareViewIcon();
+		viewIcon.paintInCenter(
+			p,
+			Rect(viewRect->x(), viewRect->y(), viewRect->size()));
+	}
 }
 
 ClickHandlerPtr Message::rightActionLink(
@@ -6020,6 +6120,45 @@ ClickHandlerPtr Message::rightActionLink(
 		return _rightAction->second->link;
 	}
 	return _rightAction->link;
+}
+
+ClickHandlerPtr Message::viewActionLink(
+		std::optional<QPoint> pressPoint) const {
+	if (delegate()->elementInSelectionMode(this).progress > 0) {
+		return nullptr;
+	}
+	if (!displayViewAction()) {
+		return nullptr;
+	}
+	ensureRightAction();
+	if (!_rightAction->viewLink) {
+		const auto sessionId = data()->history()->session().uniqueId();
+		const auto owner = &data()->history()->owner();
+		const auto itemId = data()->fullId();
+		const auto history = data()->history();
+
+		_rightAction->viewLink = std::make_shared<LambdaClickHandler>([=](ClickContext context) {
+			const auto controller = ExtractController(context);
+			if (!controller || controller->session().uniqueId() != sessionId) {
+				return;
+			}
+			const auto item = owner->message(itemId);
+			if (!item) {
+				return;
+			}
+			const auto ids = owner->itemOrItsGroup(item);
+			AyuState::setHidden(
+				&controller->session(),
+				ids,
+				!AyuState::hasHiddenFlag(item));
+			history->requestChatListMessage();
+			FiltersCacheController::fireUpdate();
+		});
+	}
+	if (pressPoint) {
+		_rightAction->viewLastPoint = *pressPoint;
+	}
+	return _rightAction->viewLink;
 }
 
 void Message::ensureRightAction() const {
@@ -6298,8 +6437,14 @@ QRect Message::innerGeometry() const {
 		const auto w = std::max(
 			(media() ? media()->resolveCustomInfoRightBottom().x() : 0),
 			result.width());
+		const auto rightAction = rightActionSize();
+		const auto rightActionWidth = rightAction
+			? rightAction->width()
+			: 0;
 		result.setWidth(std::min(
-			w + rightActionSize().value_or(QSize(0, 0)).width() * 2,
+			w
+				+ 2 * rightActionWidth
+				- (rightAction ? rightActionMargin() : 0),
 			width()));
 	}
 	if (hasBubble()) {
@@ -6366,11 +6511,11 @@ QRect Message::countGeometry() const {
 	if (hasFromPhoto()) {
 		contentLeft += st::msgPhotoSkip;
 		if (const auto size = rightActionSize()) {
-			contentWidth -= size->width() + (st::msgPhotoSkip - st::historyFastShareSize);
+			contentWidth -= size->width()
+				+ (st::msgPhotoSkip - st::historyFastShareSize);
 		}
-	//} else if (!Adaptive::Wide() && !out() && !fromChannel() && st::msgPhotoSkip - (hmaxwidth - hwidth) > 0) {
-	//	contentLeft += st::msgPhotoSkip - (hmaxwidth - hwidth);
 	}
+	contentWidth -= rightActionsExtraWidth();
 	accumulate_min(contentWidth, maxWidth());
 	accumulate_min(contentWidth, int(_bubbleWidthLimit));
 	if (mediaWidth < contentWidth) {
@@ -6499,9 +6644,11 @@ int Message::resizeContentGetHeight(int newWidth) {
 		- (centeredView ? st::msgMargin.left() : wideSkip);
 	if (hasFromPhoto()) {
 		if (const auto size = rightActionSize()) {
-			contentWidth -= size->width() + (st::msgPhotoSkip - st::historyFastShareSize);
+			contentWidth -= size->width()
+				+ (st::msgPhotoSkip - st::historyFastShareSize);
 		}
 	}
+	contentWidth -= rightActionsExtraWidth();
 	accumulate_min(contentWidth, maxWidth());
 	_bubbleWidthLimit = (UnlimitedMessageWidth.value() && !mediaDisplayed)
 		? 0x3FFFFFF

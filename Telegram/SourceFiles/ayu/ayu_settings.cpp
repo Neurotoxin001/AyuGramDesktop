@@ -11,6 +11,7 @@
 #include "ayu/ayu_ui_settings.h"
 #include "ayu/ayu_worker.h"
 #include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ayu/ayu_state.h"
 #include "ayu/ui/ayu_logo.h"
 #include "core/application.h"
 #include "features/filters/filters_cache_controller.h"
@@ -365,6 +366,7 @@ AyuSettings &AyuSettings::getInstance() {
 }
 
 void AyuSettings::load() {
+	AyuState::load();
 	std::ifstream file(getSettingsPath());
 	if (!file.good()) {
 		return;
@@ -987,6 +989,12 @@ void AyuSettings::setShowMessageShot(bool val) {
 	save();
 }
 
+void AyuSettings::setShowHideButtonNearPosts(bool val) {
+	if (_showHideButtonNearPosts.current() == val) return;
+	_showHideButtonNearPosts = val;
+	save();
+}
+
 void AyuSettings::setFilterZalgo(bool val) {
 	if (_filterZalgo.current() == val) return;
 	_filterZalgo = val;
@@ -1153,6 +1161,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"showPeerId", s._showPeerId.current()},
 		{"showMessageSeconds", s._showMessageSeconds.current()},
 		{"showMessageShot", s._showMessageShot.current()},
+		{"showHideButtonNearPosts", s._showHideButtonNearPosts.current()},
 		{"filterZalgo", s._filterZalgo.current()},
 		{"stickerConfirmation", s._stickerConfirmation.current()},
 		{"gifConfirmation", s._gifConfirmation.current()},
@@ -1257,6 +1266,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._showPeerId = j.value("showPeerId", defaults._showPeerId.current());
 	s._showMessageSeconds = j.value("showMessageSeconds", defaults._showMessageSeconds.current());
 	s._showMessageShot = j.value("showMessageShot", defaults._showMessageShot.current());
+	s._showHideButtonNearPosts = j.value("showHideButtonNearPosts", defaults._showHideButtonNearPosts.current());
 	s._filterZalgo = j.value("filterZalgo", defaults._filterZalgo.current());
 	s._stickerConfirmation = j.value("stickerConfirmation", defaults._stickerConfirmation.current());
 	s._gifConfirmation = j.value("gifConfirmation", defaults._gifConfirmation.current());

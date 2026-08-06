@@ -573,11 +573,20 @@ void GroupedMedia::draw(Painter &p, const PaintContext &context) const {
 				InfoDisplayType::Image);
 		}
 		if (const auto size = _parent->hasBubble() ? std::nullopt : _parent->rightActionSize()) {
-			auto fastShareLeft = _parent->hasRightLayout()
+			const auto fastShareLeft = _parent->hasRightLayout()
 				? (-size->width() - st::historyFastShareLeft)
-				: (fullRight + st::historyFastShareLeft);
-			auto fastShareTop = (fullBottom - st::historyFastShareBottom - size->height());
-			_parent->drawRightAction(p, context, fastShareLeft, fastShareTop, width());
+				: (fullRight
+					+ st::historyFastShareLeft
+					- _parent->rightActionMargin());
+			const auto fastShareTop = fullBottom
+				- st::historyFastShareBottom
+				- size->height();
+			_parent->drawRightAction(
+				p,
+				context,
+				fastShareLeft,
+				fastShareTop,
+				width());
 		}
 	}
 }
@@ -640,13 +649,28 @@ TextState GroupedMedia::textState(QPoint point, StateRequest request) const {
 			return bottomInfoResult;
 		}
 		if (const auto size = _parent->hasBubble() ? std::nullopt : _parent->rightActionSize()) {
-			auto fastShareLeft = _parent->hasRightLayout()
+			const auto fastShareLeft = _parent->hasRightLayout()
 				? (-size->width() - st::historyFastShareLeft)
-				: (fullRight + st::historyFastShareLeft);
-			auto fastShareTop = (fullBottom - st::historyFastShareBottom - size->height());
-			if (QRect(fastShareLeft, fastShareTop, size->width(), size->height()).contains(point)) {
+				: (fullRight
+					+ st::historyFastShareLeft
+					- _parent->rightActionMargin());
+			const auto fastShareTop = fullBottom
+				- st::historyFastShareBottom
+				- size->height();
+			const auto fastShareRect = QRect(
+				fastShareLeft,
+				fastShareTop,
+				size->width(),
+				size->height());
+			if (fastShareRect.contains(point)) {
 				result.link = _parent->rightActionLink(point
 					- QPoint(fastShareLeft, fastShareTop));
+			} else {
+				const auto viewRect = _parent->viewActionRect(fastShareRect);
+				if (viewRect && viewRect->contains(point)) {
+					result.link = _parent->viewActionLink(
+						point - viewRect->topLeft());
+				}
 			}
 		}
 	}

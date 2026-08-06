@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "dialogs/ui/dialogs_layout.h"
+#include "ayu/utils/telegram_helpers.h"
 
 #include "base/options.h"
 #include "base/unixtime.h"
@@ -815,6 +816,31 @@ void PaintRow(
 					tr::lng_community_chat_loading(tr::now));
 			}
 		}
+	} else if (item && isMessageHidden(item)) {
+		if ((thread || sublist) && !promoted) {
+			PaintDialogDate(p, entry, fakeRow, date, rectForName, context);
+		}
+		auto availableWidth = namewidth;
+		if (const auto used = PaintRightButton(p, context)) {
+			availableWidth -= used;
+		} else if (entry->isPinnedDialog(context.filter)
+			&& (context.filter || !entry->fixedOnTopIndex())) {
+			auto &icon = ThreeStateIcon(
+				st::dialogsPinnedIcon,
+				context.active,
+				context.selected);
+			icon.paint(p, context.width - context.st->padding.right() - icon.width(), context.st->textTop, context.width);
+			availableWidth -= icon.width() + st::dialogsUnreadPadding;
+		}
+		const auto &color = context.active
+			? st::dialogsTextFgServiceActive
+			: context.selected
+			? st::dialogsTextFgServiceOver
+			: st::dialogsTextFgService;
+		p.setPen(color);
+		p.setFont(st::dialogsTextFont);
+		auto text = u"Message hidden"_q;
+		p.drawTextLeft(nameleft, context.st->textTop, context.width, st::dialogsTextFont->elided(text, availableWidth));
 	} else if (!itemIsEmpty || showFilteredItem) {
 		if ((thread || sublist) && !promoted) {
 			PaintDialogDate(p, entry, fakeRow, date, rectForName, context);
@@ -1148,7 +1174,9 @@ void RowPainter::Paint(
 	const auto peer = history ? history->peer.get() : nullptr;
 	const auto badgesState = entry->chatListBadgesState();
 	entry->chatListPreloadData(); // Allow chat list message resolve.
-	const auto item = entry->chatListMessage();
+	const auto item = history
+		? history->chatListDisplayMessage()
+		: entry->chatListMessage();
 	const auto cloudDraft = [&]() -> const Data::Draft*{
 		if (!thread) {
 			return nullptr;

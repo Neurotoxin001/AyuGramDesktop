@@ -163,6 +163,7 @@ historyVideoMessageMuteSelected: icon {{ "volume_mute", historyFileThumbIconFgSe
 historyVideoMessageTtlIcon: icon {{ "chat/audio_once", historyFileThumbIconFg }};
 historyVideoMessageTtlIconSelected: icon {{ "chat/audio_once", historyFileThumbIconFgSelected }};
 historyFastShareIcon: icon {{ "fast_share", msgServiceFg }};
+historyFastShareViewIcon: icon {{ "history_views", msgServiceFg }};
 historyGoToOriginalIcon: icon {{ "filled_go_to_message", msgServiceFg, point(0px, 0px) }};
 historyFastCommentsIcon: icon {{ "fast_comments", msgServiceFg }};
 historyFastCloseIcon: icon {{ "box_button_close", msgServiceFg }};

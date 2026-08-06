@@ -13,6 +13,7 @@
 #include "ayu/ayu_settings.h"
 #include "ayu/ayu_state.h"
 #include "ayu/data/messages_storage.h"
+#include "ayu/features/filters/filters_cache_controller.h"
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/forward/ayu_forward.h"
 #include "ayu/features/forward/ayu_forward_rich.h"
@@ -260,7 +261,13 @@ void AddAyuGramActions(PeerData *peerData,
 	const auto showFilters = settings.filtersEnabled()
 		&& (!user || user->isBot());
 	const auto saveDeletedMessages = settings.saveDeletedMessages();
-	if (!showFilters && !saveDeletedMessages) {
+	const auto session = &peerData->session();
+	const auto hiddenToggleShown = AyuState::hiddenMessagesShown(
+		session,
+		peerData->id);
+	const auto allHiddenToggleShown = AyuState::allHiddenMessagesShown(session);
+	const auto hasAnyHidden = AyuState::hasAnyHiddenMessagesAll(session);
+	if (!showFilters && !saveDeletedMessages && !hiddenToggleShown && !allHiddenToggleShown && !hasAnyHidden) {
 		return;
 	}
 
@@ -298,6 +305,98 @@ void AddAyuGramActions(PeerData *peerData,
 					*filteredToggleShown
 						? &st::menuIconCaptionHide
 						: &st::menuIconCaptionShow);
+			}
+			if (hiddenToggleShown) {
+				addAction(
+					*hiddenToggleShown
+						? u"Hide Hidden (This Chat)"_q
+						: u"Show Hidden (This Chat)"_q,
+					[=]
+					{
+						AyuState::showHiddenMessages(
+							session,
+							peerData->id,
+							!*hiddenToggleShown);
+						const auto owner = &peerData->session().data();
+						if (const auto msgs = AyuState::getHiddenMessages(
+							session,
+							peerData->id)) {
+							for (const auto &msgId : *msgs) {
+								if (const auto item = owner->message(peerData->id, msgId)) {
+									owner->requestItemResize(item);
+								}
+							}
+						}
+						FiltersCacheController::fireUpdate();
+					},
+					*hiddenToggleShown
+						? &st::menuIconCaptionHide
+						: &st::menuIconCaptionShow);
+			}
+			if (allHiddenToggleShown) {
+				addAction(
+					*allHiddenToggleShown
+						? u"Hide Hidden (All)"_q
+						: u"Show Hidden (All)"_q,
+					[=]
+					{
+						AyuState::showAllHiddenMessages(
+							session,
+							!*allHiddenToggleShown);
+						const auto owner = &peerData->session().data();
+						for (const auto &[pId, msgs] : AyuState::getAllHiddenMessages(
+							session)) {
+							for (const auto &msgId : msgs) {
+								if (const auto item = owner->message(pId, msgId)) {
+									owner->requestItemResize(item);
+								}
+							}
+						}
+						FiltersCacheController::fireUpdate();
+					},
+					*allHiddenToggleShown
+						? &st::menuIconCaptionHide
+						: &st::menuIconCaptionShow);
+			}
+			if (hiddenToggleShown) {
+				addAction(
+					u"Clear Hidden (This Chat)"_q,
+					[=]
+					{
+						const auto owner = &peerData->session().data();
+						if (const auto msgs = AyuState::getHiddenMessages(
+							session,
+							peerData->id)) {
+							for (const auto &msgId : *msgs) {
+								if (const auto item = owner->message(peerData->id, msgId)) {
+									owner->requestItemResize(item);
+								}
+							}
+						}
+						AyuState::clearHidden(session, peerData->id);
+						FiltersCacheController::fireUpdate();
+					},
+					&st::menuIconDelete);
+			}
+
+			if (hasAnyHidden) {
+				addAction(
+					u"Clear Hidden (All)"_q,
+					[=]
+					{
+						const auto owner = &peerData->session().data();
+						for (const auto &[pId, msgs] : AyuState::getAllHiddenMessages(
+							session)) {
+							for (const auto &msgId : msgs) {
+								if (const auto item = owner->message(pId, msgId)) {
+									owner->requestItemResize(item);
+								}
+							}
+						}
+						AyuState::clearAllHidden(session);
+						FiltersCacheController::fireUpdate();
+					},
+					&st::menuIconDelete);
 			}
 			if (saveDeletedMessages) {
 				addAction(
@@ -524,16 +623,20 @@ void AddHideMessageAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {
 	}
 
 	const auto history = item->history();
+	const auto session = &history->session();
 	const auto owner = &history->owner();
+	const auto itemId = item->fullId();
 	menu->addAction(
 		tr::ayu_ContextHideMessage(tr::now),
 		[=]()
 		{
-			const auto ids = owner->itemOrItsGroup(item);
-			for (const auto &fullId : ids) {
-				if (const auto current = owner->message(fullId)) {
-					AyuState::hide(current);
-					current->destroy();
+			if (const auto item = owner->message(itemId)) {
+				const auto ids = owner->itemOrItsGroup(item);
+				AyuState::setHidden(session, ids, true);
+				for (const auto &fullId : ids) {
+					if (const auto current = owner->message(fullId)) {
+						current->destroy();
+					}
 				}
 			}
 			history->requestChatListMessage();

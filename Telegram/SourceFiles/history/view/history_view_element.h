@@ -149,6 +149,9 @@ public:
 		const FullMsgId &context) = 0;
 	virtual void elementHandleViaClick(not_null<UserData*> bot) = 0;
 	virtual ElementChatMode elementChatMode() = 0;
+	[[nodiscard]] bool elementIsChatWide() {
+		return elementChatMode() == ElementChatMode::Wide;
+	}
 	virtual not_null<Ui::PathShiftGradient*> elementPathShiftGradient() = 0;
 	virtual void elementReplyTo(const FullReplyTo &to) = 0;
 	virtual void elementStartInteraction(not_null<const Element*> view) = 0;
@@ -639,6 +642,11 @@ public:
 		return 0;
 	}
 	[[nodiscard]] virtual std::optional<QSize> rightActionSize() const;
+	[[nodiscard]] virtual bool displayViewAction() const;
+	[[nodiscard]] int rightActionGroupWidth() const;
+	[[nodiscard]] int rightActionMargin() const;
+	[[nodiscard]] std::optional<QRect> viewActionRect(
+		const QRect &primary) const;
 	virtual void drawRightAction(
 		Painter &p,
 		const PaintContext &context,
@@ -646,6 +654,8 @@ public:
 		int top,
 		int outerWidth) const;
 	[[nodiscard]] virtual ClickHandlerPtr rightActionLink(
+		std::optional<QPoint> pressPoint) const;
+	[[nodiscard]] virtual ClickHandlerPtr viewActionLink(
 		std::optional<QPoint> pressPoint) const;
 	[[nodiscard]] virtual TimeId displayedEditDate() const;
 	[[nodiscard]] virtual bool hasVisibleText() const;

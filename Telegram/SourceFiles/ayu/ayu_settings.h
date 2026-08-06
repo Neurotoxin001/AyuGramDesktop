@@ -341,6 +341,7 @@ public:
 	[[nodiscard]] PeerIdDisplay showPeerId() const { return _showPeerId.current(); }
 	[[nodiscard]] bool showMessageSeconds() const { return _showMessageSeconds.current(); }
 	[[nodiscard]] bool showMessageShot() const { return _showMessageShot.current(); }
+	[[nodiscard]] bool showHideButtonNearPosts() const { return _showHideButtonNearPosts.current(); }
 	[[nodiscard]] bool filterZalgo() const { return _filterZalgo.current(); }
 	[[nodiscard]] bool stickerConfirmation() const { return _stickerConfirmation.current(); }
 	[[nodiscard]] bool gifConfirmation() const { return _gifConfirmation.current(); }
@@ -428,6 +429,7 @@ public:
 	void setShowPeerId(PeerIdDisplay val);
 	void setShowMessageSeconds(bool val);
 	void setShowMessageShot(bool val);
+	void setShowHideButtonNearPosts(bool val);
 	void setFilterZalgo(bool val);
 	void setStickerConfirmation(bool val);
 	void setGifConfirmation(bool val);
@@ -591,6 +593,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> showMessageSecondsChanges() const { return _showMessageSeconds.changes(); }
 	[[nodiscard]] rpl::producer<bool> showMessageShotValue() const { return _showMessageShot.value(); }
 	[[nodiscard]] rpl::producer<bool> showMessageShotChanges() const { return _showMessageShot.changes(); }
+	[[nodiscard]] rpl::producer<bool> showHideButtonNearPostsValue() const { return _showHideButtonNearPosts.value(); }
+	[[nodiscard]] rpl::producer<bool> showHideButtonNearPostsChanges() const { return _showHideButtonNearPosts.changes(); }
 	[[nodiscard]] rpl::producer<bool> filterZalgoValue() const { return _filterZalgo.value(); }
 	[[nodiscard]] rpl::producer<bool> filterZalgoChanges() const { return _filterZalgo.changes(); }
 	[[nodiscard]] rpl::producer<bool> stickerConfirmationValue() const { return _stickerConfirmation.value(); }
@@ -699,6 +703,7 @@ private:
 	rpl::variable<PeerIdDisplay> _showPeerId = PeerIdDisplay::BotApi;
 	rpl::variable<bool> _showMessageSeconds = false;
 	rpl::variable<bool> _showMessageShot = true;
+	rpl::variable<bool> _showHideButtonNearPosts = true;
 	rpl::variable<bool> _filterZalgo = false;
 	rpl::variable<bool> _stickerConfirmation = false;
 	rpl::variable<bool> _gifConfirmation = false;
