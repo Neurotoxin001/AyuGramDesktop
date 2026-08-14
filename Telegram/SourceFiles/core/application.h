@@ -101,6 +101,10 @@ namespace Export {
 class Manager;
 } // namespace Export
 
+namespace AyuUi {
+class DeleteChannelPostsManager;
+} // namespace AyuUi
+
 namespace Calls {
 class Instance;
 } // namespace Calls
@@ -238,6 +242,10 @@ public:
 	[[nodiscard]] bool someSessionExists() const;
 	[[nodiscard]] Export::Manager &exportManager() const {
 		return *_exportManager;
+	}
+	[[nodiscard]] auto deleteChannelPostsManager() const
+	-> AyuUi::DeleteChannelPostsManager & {
+		return *_deleteChannelPostsManager;
 	}
 	[[nodiscard]] bool exportPreventsQuit();
 
@@ -427,6 +435,8 @@ private:
 	const std::unique_ptr<Data::DownloadManager> _downloadManager;
 	const std::unique_ptr<Main::Domain> _domain;
 	const std::unique_ptr<Export::Manager> _exportManager;
+	const std::unique_ptr<AyuUi::DeleteChannelPostsManager>
+		_deleteChannelPostsManager;
 	const std::unique_ptr<Calls::Instance> _calls;
 	const std::unique_ptr<Iv::Instance> _iv;
 	base::flat_map<

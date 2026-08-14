@@ -104,10 +104,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <ksandbox.h>
 
 // AyuGram includes
+#include "ayu/features/streamer_mode/streamer_mode.h"
+#include "ayu/ui/boxes/delete_channel_posts_box.h"
 #include "ayu/ayu_infra.h"
 #include "ayu/ayu_settings.h"
-#include "ayu/features/streamer_mode/streamer_mode.h"
-
 
 namespace Core {
 namespace {
@@ -173,6 +173,8 @@ Application::Application()
 , _downloadManager(std::make_unique<Data::DownloadManager>())
 , _domain(std::make_unique<Main::Domain>(cDataFile()))
 , _exportManager(std::make_unique<Export::Manager>())
+, _deleteChannelPostsManager(
+	std::make_unique<AyuUi::DeleteChannelPostsManager>())
 , _calls(std::make_unique<Calls::Instance>())
 , _iv(std::make_unique<Iv::Instance>(
 	Ui::CreateChild<Iv::DelegateImpl>(this)))
@@ -192,6 +194,8 @@ Application::Application()
 		_shouldLockAt = 0;
 		if (locked) {
 			closeAdditionalWindows();
+		} else if (!_setupEmailLock.current()) {
+			_deleteChannelPostsManager->restoreAll();
 		}
 	}, _lifetime);
 
@@ -215,6 +219,7 @@ Application::Application()
 }
 
 void Application::closeAdditionalWindows() {
+	_deleteChannelPostsManager->hideAll();
 	Payments::CheckoutProcess::ClearAll();
 	for (const auto &[index, account] : _domain->accounts()) {
 		if (account->sessionExists()) {
@@ -245,6 +250,7 @@ Application::~Application() {
 	// For example Domain::removeRedundantAccounts() is called from
 	// Domain::finish() and there is a violation on Ensures(started()).
 	closeAdditionalWindows();
+	_deleteChannelPostsManager->shutdown();
 
 	_private->proxyRotation = nullptr;
 	_domain->finish();
@@ -1343,6 +1349,9 @@ void Application::unlockSetupEmail() {
 	enumerateWindows([&](not_null<Window::Controller*> w) {
 		w->clearSetupEmailLock();
 	});
+	if (!passcodeLocked()) {
+		_deleteChannelPostsManager->restoreAll();
+	}
 	checkStartUrls();
 }
 

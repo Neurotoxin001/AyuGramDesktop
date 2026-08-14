@@ -1867,6 +1867,11 @@ void Filler::fillContextMenuActions() {
 		}
 	}
 	addClearHistory();
+	AyuUi::AddDeleteChannelPostsAction(
+		_peer,
+		_topic,
+		_controller,
+		_addAction);
 	AyuUi::AddDeleteOwnMessagesAction(_peer, _topic, _controller, _addAction);
 	addDeleteChat();
 	addLeaveChat();
@@ -1895,6 +1900,11 @@ void Filler::fillHistoryActions() {
 	addTranslate();
 	addReport();
 	addClearHistory();
+	AyuUi::AddDeleteChannelPostsAction(
+		_peer,
+		_topic,
+		_controller,
+		_addAction);
 	AyuUi::AddDeleteOwnMessagesAction(_peer, _topic, _controller, _addAction);
 	addDeleteChat();
 	addLeaveChat();

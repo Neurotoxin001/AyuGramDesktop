@@ -17,6 +17,7 @@
 #include "ayu/features/filters/filters_controller.h"
 #include "ayu/features/forward/ayu_forward.h"
 #include "ayu/features/forward/ayu_forward_rich.h"
+#include "ayu/ui/boxes/delete_channel_posts_box.h"
 #include "ayu/ui/context_menu/menu_item_subtext.h"
 #include "ayu/ui/message_history/history_section.h"
 #include "ayu/ui/settings/filters/edit_filter.h"
@@ -583,6 +584,35 @@ void AddDeleteOwnMessagesAction(PeerData *peerData,
 		tr::ayu_DeleteOwnMessages(tr::now),
 		DeleteMyMessagesHandler(sessionController, peerData),
 		&st::menuIconTTL);
+}
+
+void AddDeleteChannelPostsAction(
+		PeerData *peerData,
+		Data::ForumTopic *topic,
+		not_null<Window::SessionController*> sessionController,
+		const Window::PeerMenuCallback &addCallback) {
+	const auto channel = peerData ? peerData->asBroadcast() : nullptr;
+	if (topic || !channel) {
+		return;
+	}
+	const auto hasPanel = HasDeleteChannelPostsPanel(channel);
+	if (!hasPanel
+		&& (!channel->amIn() || !channel->canDeleteMessages())) {
+		return;
+	}
+	addCallback(Window::PeerMenuCallback::Args{
+		.text = tr::ayu_DeleteChannelPosts(tr::now),
+		.handler = [=] {
+			if (HasDeleteChannelPostsPanel(channel)
+				|| (channel->amIn()
+					&& channel->canDeleteMessages()
+					&& !sessionController->showFrozenError())) {
+				ShowDeleteChannelPostsPanel(channel);
+			}
+		},
+		.icon = &st::menuIconDeleteAttention,
+		.isAttention = true,
+	});
 }
 
 void AddHistoryAction(not_null<Ui::PopupMenu*> menu, HistoryItem *item) {

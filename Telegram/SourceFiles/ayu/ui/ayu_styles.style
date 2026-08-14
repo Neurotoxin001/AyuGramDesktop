@@ -25,6 +25,9 @@ imageViewInnerPadding: margins(16px, 16px, 16px, 16px);
 botWebViewPanelHeightIncreased: 782px;
 botWebViewPanelWidthIncreased: 512px;
 
+deleteChannelPostsPanelSize: size(480px, 680px);
+deleteChannelPostsBoxWidth: 436px;
+
 stickerRoundingSize: 5px;
 
 messageShotPadding: 4px;
