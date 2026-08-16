@@ -1508,14 +1508,26 @@ std::optional<Reaction> Reactions::parse(const MTPAvailableEffect &entry) {
 	});
 }
 
-void Reactions::send(not_null<HistoryItem*> item, bool addToRecent) {
+void Reactions::send(
+		not_null<HistoryItem*> item,
+		bool addToRecent,
+		bool markReadAfterAction) {
 	const auto id = item->fullId();
 	auto &api = _owner->session().api();
+	if (const auto refresh = _failedSendRefreshes.find(id);
+		refresh != end(_failedSendRefreshes)) {
+		const auto requestId = refresh->second;
+		_failedSendRefreshes.erase(refresh);
+		api.request(requestId).cancel();
+	}
 	auto i = _sentRequests.find(id);
 	if (i != end(_sentRequests)) {
 		api.request(i->second).cancel();
 	} else {
 		i = _sentRequests.emplace(id).first;
+	}
+	if (markReadAfterAction) {
+		_sentRequestsMarkRead.emplace(id);
 	}
 	const auto chosen = item->chosenReactions();
 	using Flag = MTPmessages_SendReaction::Flag;
@@ -1531,16 +1543,56 @@ void Reactions::send(not_null<HistoryItem*> item, bool addToRecent) {
 		}) | ranges::views::transform(
 			ReactionToMTP
 		) | ranges::to<QVector<MTPReaction>>())
-	)).done([=](const MTPUpdates &result) {
-		_sentRequests.remove(id);
+	)).done([=](const MTPUpdates &result, mtpRequestId requestId) {
+		const auto request = _sentRequests.find(id);
+		if (request == end(_sentRequests)
+			|| request->second != requestId) {
+			return;
+		}
+		_sentRequests.erase(request);
+		const auto shouldMarkRead = _sentRequestsMarkRead.remove(id);
 		_owner->session().api().applyUpdates(result);
 
 		const auto &ghost = AyuSettings::ghost(&_owner->session());
-		if (!ghost.sendReadMessages() && ghost.markReadAfterAction() && item) {
+		if (shouldMarkRead
+			&& !ghost.sendReadMessages()
+			&& ghost.markReadAfterAction()
+			&& item) {
 			readHistory(item);
 		}
-	}).fail([=](const MTP::Error &error) {
-		_sentRequests.remove(id);
+	}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
+		const auto request = _sentRequests.find(id);
+		if (request == end(_sentRequests)
+			|| request->second != requestId) {
+			return;
+		}
+		_sentRequests.erase(request);
+		_sentRequestsMarkRead.remove(id);
+		const auto failed = _owner->message(id);
+		if (!failed) {
+			return;
+		}
+		auto &api = _owner->session().api();
+		const auto refreshId = api.request(MTPmessages_GetMessagesReactions(
+			failed->history()->peer->input(),
+			MTP_vector<MTPint>(1, MTP_int(id.msg))
+		)).done([=](const MTPUpdates &result, mtpRequestId requestId) {
+			const auto refresh = _failedSendRefreshes.find(id);
+			if (refresh == end(_failedSendRefreshes)
+				|| refresh->second != requestId) {
+				return;
+			}
+			_failedSendRefreshes.erase(refresh);
+			_owner->session().api().applyUpdates(result);
+		}).fail([=](const MTP::Error &error, mtpRequestId requestId) {
+			const auto refresh = _failedSendRefreshes.find(id);
+			if (refresh == end(_failedSendRefreshes)
+				|| refresh->second != requestId) {
+				return;
+			}
+			_failedSendRefreshes.erase(refresh);
+		}).send();
+		_failedSendRefreshes.emplace(id, refreshId);
 	}).send();
 }
 
@@ -1763,8 +1815,12 @@ void Reactions::pollCollected() {
 	}
 }
 
+bool Reactions::sendingRegular(FullMsgId id) const {
+	return _sentRequests.contains(id);
+}
+
 bool Reactions::sending(not_null<HistoryItem*> item) const {
-	return _sentRequests.contains(item->fullId())
+	return sendingRegular(item->fullId())
 		|| _sendingPaid.contains(item);
 }
 
@@ -1959,7 +2015,10 @@ MessageReactions::~MessageReactions() {
 	}
 }
 
-void MessageReactions::add(const ReactionId &id, bool addToRecent) {
+void MessageReactions::add(
+		const ReactionId &id,
+		bool addToRecent,
+		bool markReadAfterAction) {
 	Expects(!id.empty());
 	Expects(!id.paid());
 
@@ -2022,11 +2081,13 @@ void MessageReactions::add(const ReactionId &id, bool addToRecent) {
 		_list.push_back({ .id = id, .count = 1, .my = true });
 	}
 	auto &owner = history->owner();
-	owner.reactions().send(_item, addToRecent);
+	owner.reactions().send(_item, addToRecent, markReadAfterAction);
 	owner.notifyItemDataChange(_item);
 }
 
-void MessageReactions::remove(const ReactionId &id) {
+void MessageReactions::remove(
+		const ReactionId &id,
+		bool markReadAfterAction) {
 	Expects(!id.paid());
 
 	const auto history = _item->history();
@@ -2065,7 +2126,7 @@ void MessageReactions::remove(const ReactionId &id) {
 		history->owner().reactions().decrementMyTag(id, sublist);
 	}
 	auto &owner = history->owner();
-	owner.reactions().send(_item, false);
+	owner.reactions().send(_item, false, markReadAfterAction);
 	owner.notifyItemDataChange(_item);
 }
 

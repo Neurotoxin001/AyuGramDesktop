@@ -142,7 +142,11 @@ public:
 
 	void preloadAnimationsFor(const ReactionId &emoji);
 
-	void send(not_null<HistoryItem*> item, bool addToRecent);
+	void send(
+		not_null<HistoryItem*> item,
+		bool addToRecent,
+		bool markReadAfterAction);
+	[[nodiscard]] bool sendingRegular(FullMsgId id) const;
 	[[nodiscard]] bool sending(not_null<HistoryItem*> item) const;
 
 	void poll(not_null<HistoryItem*> item, crl::time now);
@@ -354,7 +358,9 @@ private:
 	bool _waitingForReactions = false;
 	bool _waitingForEffects = false;
 
+	base::flat_map<FullMsgId, mtpRequestId> _failedSendRefreshes;
 	base::flat_map<FullMsgId, mtpRequestId> _sentRequests;
+	base::flat_set<FullMsgId> _sentRequestsMarkRead;
 
 	base::flat_map<not_null<HistoryItem*>, crl::time> _repaintItems;
 	base::Timer _repaintTimer;
@@ -403,8 +409,11 @@ public:
 
 	using TopPaid = MessageReactionsTopPaid;
 
-	void add(const ReactionId &id, bool addToRecent);
-	void remove(const ReactionId &id);
+	void add(
+		const ReactionId &id,
+		bool addToRecent,
+		bool markReadAfterAction);
+	void remove(const ReactionId &id, bool markReadAfterAction);
 	bool removeFromParticipant(
 		not_null<PeerData*> participant,
 		const ReactionId &knownReaction);

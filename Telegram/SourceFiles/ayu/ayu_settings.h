@@ -82,6 +82,22 @@ NLOHMANN_JSON_SERIALIZE_ENUM(SendWithoutSoundOption, {
 	{SendWithoutSoundOption::Always, 2},
 })
 
+struct AutoReactionRule {
+	bool enabled = false;
+	int64 chatId = 0;
+	uint64 userId = 0;
+	QString reaction;
+
+	friend inline bool operator==(
+		const AutoReactionRule &,
+		const AutoReactionRule &) = default;
+};
+
+void to_json(nlohmann::json &j, const AutoReactionRule &rule);
+void from_json(const nlohmann::json &j, AutoReactionRule &rule);
+[[nodiscard]] bool IsValidAutoReactionChatId(int64 id);
+[[nodiscard]] bool IsValidAutoReactionUserId(uint64 id);
+
 class GhostModeAccountSettings {
 public:
 	GhostModeAccountSettings();
@@ -253,6 +269,11 @@ public:
 	[[nodiscard]] static GhostModeAccountSettings &ghost(not_null<Main::Session*> session);
 	[[nodiscard]] static GhostModeAccountSettings &ghost(uint64 userId);
 	[[nodiscard]] static GhostModeAccountSettings &ghost();
+	[[nodiscard]] AutoReactionRule autoReaction(
+		not_null<Main::Session*> session) const;
+	void setAutoReaction(
+		not_null<Main::Session*> session,
+		const AutoReactionRule &rule);
 
 	[[nodiscard]] bool useGlobalGhostMode() const { return _useGlobalGhostMode.current(); }
 	void setUseGlobalGhostMode(bool val);
@@ -719,6 +740,7 @@ private:
 
 	rpl::variable<bool> _useGlobalGhostMode = true;
 	std::map<uint64, std::unique_ptr<GhostModeAccountSettings>> _ghostAccounts;
+	std::map<uint64, AutoReactionRule> _autoReactionAccounts;
 
 	MessageShotSettings _messageShotSettings;
 };

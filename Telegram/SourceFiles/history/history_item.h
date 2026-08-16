@@ -110,6 +110,7 @@ enum class HistoryReactionSource : char {
 	Selector,
 	Quick,
 	Existing,
+	Automated,
 };
 
 enum class PaidPostType : uchar {

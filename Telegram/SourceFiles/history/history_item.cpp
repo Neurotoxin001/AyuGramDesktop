@@ -3487,9 +3487,11 @@ void HistoryItem::toggleReaction(
 	Expects(!reaction.paid());
 
 	const auto addToRecent = (source == HistoryReactionSource::Selector);
+	const auto markReadAfterAction = (
+		source != HistoryReactionSource::Automated);
 	if (_reactions
 		&& ranges::contains(_reactions->chosen(), reaction)) {
-		_reactions->remove(reaction);
+		_reactions->remove(reaction, markReadAfterAction);
 		if (_reactions->empty() && !_reactions->localPaidData()) {
 			_reactions = nullptr;
 			_flags &= ~MessageFlag::CanViewReactions;
@@ -3503,9 +3505,9 @@ void HistoryItem::toggleReaction(
 		if (canViewReactions) {
 			_flags |= MessageFlag::CanViewReactions;
 		}
-		_reactions->add(reaction, addToRecent);
+		_reactions->add(reaction, addToRecent, markReadAfterAction);
 	} else {
-		_reactions->add(reaction, addToRecent);
+		_reactions->add(reaction, addToRecent, markReadAfterAction);
 	}
 	_history->owner().notifyItemDataChange(this);
 }

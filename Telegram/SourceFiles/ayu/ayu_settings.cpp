@@ -41,7 +41,53 @@ void repaintApp() {
 
 rpl::lifetime lifetime; // idk reactivity dies when placed in `GhostModeAccountSettings` as field
 
+constexpr auto kBotApiChannelOffset = int64(1000000000000);
+constexpr auto kMaximumPeerBareId = int64(0xFFFFFFFFFFFFULL);
+
 } // namespace
+
+bool IsValidAutoReactionChatId(int64 id) {
+	return (id > 0 && id <= kMaximumPeerBareId)
+		|| (id < 0 && id > -kBotApiChannelOffset)
+		|| (id < -kBotApiChannelOffset
+			&& id >= -(kBotApiChannelOffset + kMaximumPeerBareId));
+}
+
+bool IsValidAutoReactionUserId(uint64 id) {
+	return id && id <= uint64(kMaximumPeerBareId);
+}
+
+void to_json(nlohmann::json &j, const AutoReactionRule &rule) {
+	j = nlohmann::json{
+		{"enabled", rule.enabled},
+		{"chatId", rule.chatId},
+		{"userId", rule.userId},
+		{"reaction", rule.reaction},
+	};
+}
+
+void from_json(const nlohmann::json &j, AutoReactionRule &rule) {
+	rule = AutoReactionRule();
+	if (!j.is_object()) {
+		return;
+	}
+	try {
+		rule.enabled = j.value("enabled", false);
+		rule.chatId = j.value("chatId", int64(0));
+		rule.userId = j.value("userId", uint64(0));
+		rule.reaction = j.value("reaction", QString());
+	} catch (...) {
+		rule = AutoReactionRule();
+		return;
+	}
+	rule.reaction = rule.reaction.trimmed();
+	if (rule.enabled
+		&& (!IsValidAutoReactionChatId(rule.chatId)
+			|| !IsValidAutoReactionUserId(rule.userId)
+			|| rule.reaction.isEmpty())) {
+		rule.enabled = false;
+	}
+}
 
 GhostModeAccountSettings::GhostModeAccountSettings() {
 	rpl::combine(
@@ -457,6 +503,34 @@ GhostModeAccountSettings &AyuSettings::ghost() {
 		}
 	}
 	return ghost(0);
+}
+
+AutoReactionRule AyuSettings::autoReaction(
+		not_null<Main::Session*> session) const {
+	const auto i = _autoReactionAccounts.find(session->userId().bare);
+	return (i != end(_autoReactionAccounts))
+		? i->second
+		: AutoReactionRule();
+}
+
+void AyuSettings::setAutoReaction(
+		not_null<Main::Session*> session,
+		const AutoReactionRule &rule) {
+	const auto accountId = session->userId().bare;
+	const auto i = _autoReactionAccounts.find(accountId);
+	if (i == end(_autoReactionAccounts)) {
+		if (rule == AutoReactionRule()) {
+			return;
+		}
+		_autoReactionAccounts.emplace(accountId, rule);
+	} else if (i->second == rule) {
+		return;
+	} else if (rule == AutoReactionRule()) {
+		_autoReactionAccounts.erase(i);
+	} else {
+		i->second = rule;
+	}
+	save();
 }
 
 void AyuSettings::setUseGlobalGhostMode(bool val) {
@@ -1082,9 +1156,14 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 	for (const auto &[key, value] : s._ghostAccounts) {
 		ghostAccounts[std::to_string(key)] = *value;
 	}
+	auto autoReactionAccounts = nlohmann::json::object();
+	for (const auto &[key, value] : s._autoReactionAccounts) {
+		autoReactionAccounts[std::to_string(key)] = value;
+	}
 
 	j = nlohmann::json{
 		{"ghostModeSettings", ghostAccounts},
+		{"autoReactionSettings", autoReactionAccounts},
 		{"useGlobalGhostMode", s._useGlobalGhostMode.current()},
 		{"saveDeletedMessages", s._saveDeletedMessages.current()},
 		{"saveMessagesHistory", s._saveMessagesHistory.current()},
@@ -1188,6 +1267,24 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 			value.get_to(*account);
 			s._ghostAccounts[std::stoull(key)] = std::move(account);
 		}
+	}
+	if (j.contains("autoReactionSettings")
+		&& j["autoReactionSettings"].is_object()) {
+		auto parsed = std::map<uint64, AutoReactionRule>();
+		for (const auto &[key, value]
+				: j["autoReactionSettings"].items()) {
+			auto ok = false;
+			const auto accountId = QString::fromStdString(key).toULongLong(&ok);
+			if (!ok || !accountId || !value.is_object()) {
+				continue;
+			}
+			auto rule = AutoReactionRule();
+			value.get_to(rule);
+			if (rule != AutoReactionRule()) {
+				parsed.emplace(accountId, std::move(rule));
+			}
+		}
+		s._autoReactionAccounts = std::move(parsed);
 	}
 
 	s._useGlobalGhostMode = j.value("useGlobalGhostMode", defaults._useGlobalGhostMode.current());

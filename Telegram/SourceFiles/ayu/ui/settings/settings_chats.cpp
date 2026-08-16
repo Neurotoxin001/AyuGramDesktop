@@ -6,22 +6,25 @@
 // Copyright @Radolyn, 2026
 #include "ayu/ui/settings/settings_chats.h"
 
-#include "lang_auto.h"
 #include "ayu/ayu_settings.h"
+#include "ayu/ui/boxes/auto_reaction_box.h"
 #include "ayu/ui/boxes/edit_mark_box.h"
 #include "ayu/ui/components/message_preview.h"
 #include "ayu/ui/settings/ayu_builder.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
 #include "ayu/ui/settings/settings_main.h"
+#include "lang_auto.h"
 #include "settings/settings_builder.h"
 #include "settings/settings_common.h"
-#include "styles/style_ayu_icons.h"
-#include "styles/style_menu_icons.h"
-#include "styles/style_settings.h"
+#include "ui/layers/generic_box.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 
 #include <memory>
+
+#include "styles/style_ayu_icons.h"
+#include "styles/style_menu_icons.h"
+#include "styles/style_settings.h"
 
 namespace Settings {
 
@@ -75,6 +78,26 @@ void BuildStickersAndEmoji(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.toggledWhenAll = false,
 	});
 
+	ayu.addSectionDivider();
+}
+
+void BuildAutoReaction(SectionBuilder &builder, AyuSectionBuilder &ayu) {
+	const auto controller = builder.controller();
+
+	builder.addSubsectionTitle(tr::ayu_AutoReactionHeader());
+	builder.addButton({
+		.id = u"ayu/autoReaction"_q,
+		.title = tr::ayu_AutoReactionButton(),
+		.icon = { &st::menuIconReactions },
+		.onClick = [=] {
+			controller->show(Box(
+				AyuUi::FillAutoReactionBox,
+				&controller->session()));
+		},
+	});
+	builder.addSkip();
+	builder.addDividerText(tr::ayu_AutoReactionSettingsDescription());
+	builder.addSkip();
 	ayu.addSectionDivider();
 }
 
@@ -456,6 +479,7 @@ const auto kMeta = BuildHelper({
 
 	builder.addSkip();
 	BuildStickersAndEmoji(builder, ayu);
+	BuildAutoReaction(builder, ayu);
 	BuildGroupsAndChannels(builder, ayu);
 	BuildMarks(builder, ayu, previewState);
 	BuildWideMessagesMultiplier(builder, ayu, previewState);

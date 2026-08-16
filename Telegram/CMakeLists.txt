@@ -173,6 +173,8 @@ set(ayugram_files
         ayu/ui/message_history/history_item.h
         ayu/ui/message_history/history_section.cpp
         ayu/ui/message_history/history_section.h
+        ayu/ui/boxes/auto_reaction_box.cpp
+        ayu/ui/boxes/auto_reaction_box.h
         ayu/ui/boxes/delete_channel_posts_box.cpp
         ayu/ui/boxes/delete_channel_posts_box.h
         ayu/ui/boxes/edit_mark_box.cpp
@@ -206,6 +208,8 @@ set(ayugram_files
         ayu/libs/sqlite/sqlite3.c
         ayu/libs/sqlite/sqlite3.h
         ayu/libs/sqlite/sqlite_orm.h
+        ayu/features/auto_reactions/auto_reactions.cpp
+        ayu/features/auto_reactions/auto_reactions.h
         ayu/features/streamer_mode/platform/linux/streamer_mode_linux.cpp
         ayu/features/streamer_mode/platform/linux/streamer_mode_linux.h
         ayu/features/streamer_mode/platform/mac/streamer_mode_mac.mm
