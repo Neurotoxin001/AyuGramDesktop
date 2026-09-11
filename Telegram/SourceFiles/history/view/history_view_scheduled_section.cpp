@@ -7,6 +7,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_scheduled_section.h"
 
+#include "history/view/controls/history_view_forward_panel.h"
+
 #include "history/view/controls/history_view_compose_controls.h"
 #include "history/view/history_view_empty_list_bubble.h"
 #include "history/view/history_view_top_bar_widget.h"
@@ -739,8 +741,12 @@ void ScheduledWidget::send() {
 		return;
 	}
 	const auto callback = [=](Api::SendOptions options) { send(options); };
+	auto details = sendMenuDetails();
+	details.forwardedMessagesCount = int(_composeControls->forwardItems().size());
+	details.forwardedPostsCount = int(
+		Controls::ForwardedPostStarts(_composeControls->forwardItems()).size());
 	controller()->show(
-		PrepareScheduleBox(this, _show, sendMenuDetails(), callback));
+		PrepareScheduleBox(this, _show, details, callback));
 }
 
 void ScheduledWidget::send(Api::SendOptions options) {

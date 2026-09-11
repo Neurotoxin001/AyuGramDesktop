@@ -3847,12 +3847,18 @@ void ApiWrap::forwardMessages(
 		return;
 	}
 
+	const auto scheduleInterval = action.options.staggerForwardedMessages
+		&& action.options.scheduled > 0
+		&& action.options.scheduled != Api::kScheduledUntilOnlineTimestamp
+		? action.options.scheduledMediaInterval
+		: 0;
 	auto &histories = _session->data().histories();
 
 	for (auto i = begin(draft.items); i != end(draft.items);) {
 		const auto item = *i;
 		if (item->isSavedMusicItem()) {
 			SendExistingDocument(MessageToSend(action), item->media()->document());
+			action.options.scheduled += scheduleInterval;
 			i = draft.items.erase(i);
 		} else {
 			++i;
@@ -3943,6 +3949,7 @@ void ApiWrap::forwardMessages(
 	}
 
 	auto forwardFrom = draft.items.front()->history()->peer;
+	auto forwardGroup = draft.items.front()->groupId();
 	auto ids = QVector<MTPint>();
 	auto randomIds = QVector<MTPlong>();
 	auto localIds = std::shared_ptr<base::flat_map<uint64, FullMsgId>>();
@@ -4073,10 +4080,15 @@ void ApiWrap::forwardMessages(
 			localIds->emplace(randomId, newId);
 		}
 		const auto newFrom = item->history()->peer;
-		if (forwardFrom != newFrom) {
+		const auto newGroup = item->groupId();
+		const auto nextPost = !newGroup || newGroup != forwardGroup;
+		if (!ids.empty()
+			&& (forwardFrom != newFrom || (scheduleInterval && nextPost))) {
 			sendAccumulated();
+			action.options.scheduled += scheduleInterval;
 			forwardFrom = newFrom;
 		}
+		forwardGroup = newGroup;
 		ids.push_back(MTP_int(item->id));
 		randomIds.push_back(MTP_long(randomId));
 	}
@@ -4275,13 +4287,19 @@ void ApiWrap::sendFiles(
 			}
 		}
 	}
-	const auto to = FileLoadTaskOptions(action);
+	const auto baseTo = FileLoadTaskOptions(action);
 	if (album) {
-		album->options = to.options;
+		album->options = baseTo.options;
 	}
 	auto tasks = std::vector<std::unique_ptr<Task>>();
 	tasks.reserve(list.files.size());
 	for (auto &file : list.files) {
+		auto to = baseTo;
+		if (!album
+			&& to.options.scheduled > 0
+			&& to.options.scheduled != Api::kScheduledUntilOnlineTimestamp) {
+			to.options.scheduled += file.scheduleOffset;
+		}
 		const auto uploadWithType = !album
 			? type
 			: (file.type == Ui::PreparedFile::Type::Photo

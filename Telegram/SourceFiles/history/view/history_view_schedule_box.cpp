@@ -9,6 +9,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 #include "api/api_common.h"
 #include "chat_helpers/compose/compose_show.h"
+#include "core/application.h"
+#include "core/core_settings.h"
 #include "data/components/scheduled_messages.h"
 #include "data/data_document.h"
 #include "data/data_media_types.h"
@@ -32,6 +34,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/text/text_utilities.h"
 #include "ui/ui_utility.h"
 #include "ui/widgets/fields/input_field.h"
+#include "ui/widgets/fields/number_input.h"
+#include "ui/widgets/checkbox.h"
 #include "ui/widgets/labels.h"
 #include "ui/widgets/buttons.h"
 #include "ui/widgets/popup_menu.h"
@@ -40,9 +44,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "menu/menu_send.h"
 #include "settings/sections/settings_premium.h"
 #include "styles/style_boxes.h"
+#include "styles/style_choose_date_time.h"
 #include "styles/style_info.h"
 #include "styles/style_menu_icons.h"
 #include "styles/style_widgets.h"
+
+#include <QtCore/QDateTime>
+#include <QtGui/QWheelEvent>
+
+#include <string>
 
 namespace HistoryView::details {
 
@@ -316,12 +326,79 @@ void ScheduleBox(
 		Fn<void(Api::SendOptions)> done,
 		TimeId time,
 		ScheduleBoxStyleArgs style) {
+	struct State {
+		Ui::NumberInput *interval = nullptr;
+		Ui::Checkbox *useInterval = nullptr;
+	};
+	const auto state = box->lifetime().make_state<State>();
+	const auto intervalCount = std::max(
+		details.ungroupedFilesCount,
+		details.forwardedPostsCount
+			? details.forwardedPostsCount
+			: details.forwardedMessagesCount);
+	const auto intervalKey = details.barePeerId
+		? "scheduled_media_interval/" + std::to_string(session->uniqueId())
+			+ "/" + std::to_string(details.barePeerId)
+		: std::string();
+	constexpr auto kMaxIntervalMinutes = 366 * 24 * 60;
+	constexpr auto kIntervalWheelStep = 10;
+	const auto initialMinutes = std::clamp(
+		intervalKey.empty()
+			? initialOptions.scheduledMediaInterval / 60
+			: Core::App().settings().readPref<int>(
+				intervalKey,
+				initialOptions.scheduledMediaInterval / 60),
+		1,
+		kMaxIntervalMinutes);
+	const auto enabledKey = intervalKey + "/enabled";
+	const auto initiallyEnabled = intervalKey.empty()
+		? !details.forwardedMessagesCount
+		: Core::App().settings().readPref<bool>(
+			enabledKey,
+			!details.forwardedMessagesCount);
 	const auto repeat = std::make_shared<TimeId>(
 		initialOptions.scheduleRepeatPeriod);
 	const auto silent = std::make_shared<bool>(false);
 	const auto submit = [=](Api::SendOptions options) {
 		if (!options.scheduled) {
 			return;
+		}
+		options.staggerForwardedMessages = false;
+		if (state->interval && !state->useInterval->checked()) {
+			options.scheduledMediaInterval = 0;
+		}
+		if (state->interval
+			&& state->useInterval->checked()
+			&& options.scheduled != Api::kScheduledUntilOnlineTimestamp) {
+			const auto minutes = state->interval->getLastText().toInt();
+			if (minutes <= 0) {
+				state->interval->showError();
+				state->interval->setFocusFast();
+				return;
+			}
+			const auto lastScheduled = int64(options.scheduled)
+				+ int64(minutes) * 60 * (intervalCount - 1);
+			const auto maxScheduled = base::unixtime::serialize(
+				QDateTime::currentDateTime().addYears(1)) - 1;
+			if (lastScheduled > maxScheduled) {
+				state->interval->showError();
+				state->interval->setFocusFast();
+				box->uiShow()->showToast(
+					tr::lng_schedule_media_interval_too_long(tr::now));
+				return;
+			}
+			options.scheduledMediaInterval = minutes * 60;
+			options.staggerForwardedMessages = details.forwardedMessagesCount > 1;
+			if (!intervalKey.empty()) {
+				Core::App().settings().writePref<int>(intervalKey, minutes);
+			}
+		}
+		if (state->useInterval
+			&& !intervalKey.empty()
+			&& options.scheduled != Api::kScheduledUntilOnlineTimestamp) {
+			Core::App().settings().writePref<bool>(
+				enabledKey,
+				state->useInterval->checked());
 		}
 		// Pro tip: Hold Ctrl key to send a silent scheduled message!
 		if (base::IsCtrlPressed() || *silent) {
@@ -354,6 +431,67 @@ void ScheduleBox(
 			? ScheduledImageForDate(history, MsgId(details.bareTopicRootId))
 			: nullptr),
 	});
+
+	if (details.ungroupedFilesCount > 1 || details.forwardedMessagesCount > 1) {
+		state->useInterval = box->addRow(
+			object_ptr<Ui::Checkbox>(
+				box,
+				tr::lng_schedule_use_interval(tr::now),
+				initiallyEnabled),
+			style::al_top);
+		const auto row = box->addRow(
+			object_ptr<Ui::FixedHeightWidget>(
+				box,
+				st::scheduleMediaIntervalHeight),
+			st::scheduleMediaIntervalMargin,
+			style::al_top);
+		const auto label = Ui::CreateChild<Ui::FlatLabel>(
+			row,
+			tr::lng_schedule_media_interval(),
+			*style.chooseDateTimeArgs.labelStyle);
+		const auto field = state->interval = Ui::CreateChild<Ui::NumberInput>(
+			row,
+			*style.chooseDateTimeArgs.dateFieldStyle,
+			rpl::single(QString()),
+			QString::number(initialMinutes),
+			kMaxIntervalMinutes);
+		field->setAccessibleName(tr::lng_schedule_media_interval(tr::now));
+		state->useInterval->checkedValue() | rpl::on_next([=](bool enabled) {
+			field->setEnabled(enabled);
+			field->hideError();
+		}, field->lifetime());
+		base::install_event_filter(field, [=](not_null<QEvent*> event) {
+			if (event->type() != QEvent::Wheel || !field->isEnabled()) {
+				return base::EventFilterResult::Continue;
+			}
+			const auto direction = Ui::WheelDirection(
+				static_cast<QWheelEvent*>(event.get()));
+			if (direction) {
+				const auto minutes = field->getLastText().toInt();
+				field->setText(QString::number(std::clamp(
+					minutes + direction * kIntervalWheelStep,
+					1,
+					kMaxIntervalMinutes)));
+				field->hideError();
+			}
+			return base::EventFilterResult::Cancel;
+		});
+		row->widthValue() | rpl::on_next([=](int width) {
+			field->resizeToWidth(st::scheduleTimeWidth);
+			label->resizeToWidth(width
+				- st::scheduleTimeWidth
+				- st::scheduleMediaIntervalSkip);
+			label->moveToLeft(0, (row->height() - label->height()) / 2);
+			field->moveToRight(0, (row->height() - field->height()) / 2);
+		}, row->lifetime());
+		rpl::duplicate(descriptor.width) | rpl::on_next([=](int width) {
+			state->useInterval->setNaturalWidth(width);
+			row->setNaturalWidth(width);
+		}, row->lifetime());
+		QObject::connect(field, &Ui::NumberInput::submitted, box, [=] {
+			submit(with(descriptor.collect()));
+		});
+	}
 
 	if (repeat) {
 		const auto boxShow = box->uiShow();

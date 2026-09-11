@@ -782,6 +782,12 @@ Fn<SendMenu::Details()> SendFilesBox::prepareSendMenuDetails(
 			? SendMenu::SpoilerState::Enabled
 			: SendMenu::SpoilerState::Possible;
 		const auto way = _sendWay.current();
+		result.forwardedMessagesCount = 0;
+		result.forwardedPostsCount = 0;
+		result.ungroupedFilesCount = way.groupFiles()
+			? 0
+			: int(_list.files.size() + _list.filesToProcess.size())
+				+ (_preparing ? 1 : 0);
 		const auto canMoveCaption = canMoveCaptionInCurrentSendWay()
 			&& HasSendText(_caption);
 		result.caption = !canMoveCaption
@@ -2473,6 +2479,9 @@ bool SendFilesBox::validateLength(const QString &text) const {
 void SendFilesBox::send(
 		Api::SendOptions options,
 		bool ctrlShiftEnter) {
+	const auto originalOptions = options;
+	const auto staggerScheduled = options.scheduled > 0
+		&& options.scheduled != Api::kScheduledUntilOnlineTimestamp;
 	const auto sumSize = ranges::accumulate(
 		_list.files, int64(0),
 		[](int64 sum, const auto &file) { return sum + file.size; });
@@ -2492,7 +2501,7 @@ void SendFilesBox::send(
 	}
 	if (_preparing) {
 		_whenReadySend = [=] {
-			send(options, ctrlShiftEnter);
+			send(originalOptions, ctrlShiftEnter);
 		};
 		return;
 	}
@@ -2536,6 +2545,14 @@ void SendFilesBox::send(
 		}
 
 		Assert(_list.filesToProcess.empty());
+
+		auto scheduleOffset = 0;
+		for (auto &file : _list.files) {
+			file.scheduleOffset = scheduleOffset;
+			if (staggerScheduled && !way.groupFiles()) {
+				scheduleOffset += options.scheduledMediaInterval;
+			}
+		}
 
 		auto groups = DivideByGroups(
 			std::move(_list),

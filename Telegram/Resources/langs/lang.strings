@@ -4943,6 +4943,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "lng_schedule_repeat_promo" = "Subscribe to {link} to schedule repeating messages.";
 "lng_schedule_repeat_promo_link" = "Telegram Premium";
 "lng_schedule_at" = "at";
+"lng_schedule_use_interval" = "Use interval";
+"lng_schedule_media_interval" = "Interval between posts (min)";
+"lng_schedule_media_interval_too_long" = "The last file must be scheduled within one year. Choose a shorter interval or an earlier start time.";
 "lng_message_ph" = "Write a message...";
 "lng_broadcast_ph" = "Broadcast a message...";
 "lng_broadcast_silent_ph" = "Silent broadcast...";

@@ -49,6 +49,19 @@ constexpr auto kNameNoCaptionsVersion = -3;
 
 } // namespace
 
+std::vector<int> ForwardedPostStarts(const HistoryItemsList &items) {
+	auto result = std::vector<int>();
+	for (auto i = 0; i != int(items.size()); ++i) {
+		if (!i
+			|| !items[i]->groupId()
+			|| items[i]->groupId() != items[i - 1]->groupId()
+			|| items[i]->history() != items[i - 1]->history()) {
+			result.push_back(i);
+		}
+	}
+	return result;
+}
+
 ForwardPanel::ForwardPanel(Fn<void()> repaint)
 : _repaint(std::move(repaint)) {
 }

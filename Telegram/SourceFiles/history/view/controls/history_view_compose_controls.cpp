@@ -4048,7 +4048,11 @@ auto ComposeControls::computeSendButtonType() const {
 }
 
 SendMenu::Details ComposeControls::sendMenuDetails() const {
-	return !_history ? SendMenu::Details() : _sendMenuDetails();
+	auto result = !_history ? SendMenu::Details() : _sendMenuDetails();
+	result.forwardedMessagesCount = int(forwardItems().size());
+	result.forwardedPostsCount = int(
+		Controls::ForwardedPostStarts(forwardItems()).size());
+	return result;
 }
 
 SendMenu::Details ComposeControls::saveMenuDetails() const {

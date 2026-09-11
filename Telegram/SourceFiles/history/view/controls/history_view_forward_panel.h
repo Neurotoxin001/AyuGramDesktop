@@ -89,6 +89,8 @@ void EditWebPageOptions(
 	Data::WebPageDraft draft,
 	Fn<void(Data::WebPageDraft)> done);
 
+[[nodiscard]] std::vector<int> ForwardedPostStarts(const HistoryItemsList &items);
+
 [[nodiscard]] bool HasOnlyForcedForwardedInfo(const HistoryItemsList &list);
 [[nodiscard]] bool HasOnlyDroppedForwardedInfo(const HistoryItemsList &list);
 [[nodiscard]] bool HasDropForwardedInfoSetting(const HistoryItemsList &list);

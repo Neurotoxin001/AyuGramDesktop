@@ -550,7 +550,17 @@ SendMenu::Details ShareBox::sendMenuDetails() const {
 		: SendMenu::Type::Scheduled;
 
 	// We can't support effect here because we don't have ChatHelpers::Show.
-	return { .type = type, .effectAllowed = false };
+	return {
+		.type = type,
+		.barePeerId = (selected.size() == 1)
+			? selected.front()->peer()->id.value
+			: 0,
+		.effectAllowed = false,
+		.forwardedMessagesCount = _descriptor.countMessagesCallback
+			? _descriptor.countMessagesCallback(TextWithTags())
+			: 0,
+		.forwardedPostsCount = _descriptor.forwardOptions.postsCount,
+	};
 }
 
 void ShareBox::showMenu(not_null<Ui::RpWidget*> parent) {
@@ -1924,13 +1934,14 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 				? nullptr
 				: thread->maybeSublistPeer();
 			const auto fromPeer = history->peer;
-			const auto msgCount = int(existingIds.size());
-			const auto starsPaid = std::min(
-				peer->starsPerMessageChecked(),
-				options.starsApproved);
-			if (starsPaid) {
-				options.starsApproved -= starsPaid;
-			}
+			const auto stagger = options.staggerForwardedMessages
+				&& options.scheduled > 0
+				&& options.scheduled != Api::kScheduledUntilOnlineTimestamp;
+			auto batchStarts = stagger
+				? HistoryView::Controls::ForwardedPostStarts(items)
+				: std::vector<int>{ 0 };
+			const auto batchCount = int(batchStarts.size());
+			batchStarts.push_back(int(items.size()));
 			const auto sendFlags = commonSendFlags
 				| (ShouldSendSilent(peer, options)
 					? Flag::f_silent
@@ -1938,51 +1949,58 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 				| (options.shortcutId
 					? Flag::f_quick_reply_shortcut
 					: Flag(0))
-				| (starsPaid ? Flag::f_allow_paid_stars : Flag())
 				| (sublistPeer ? Flag::f_reply_to : Flag())
 				| (options.suggest ? Flag::f_suggested_post : Flag())
 				| (options.effectId ? Flag::f_effect : Flag());
-			auto buildMessage = [=](
-					not_null<History*> history,
-					FullReplyTo replyTo)
-				-> Data::Histories::PreparedMessage {
-				const auto kGeneralId
-					= Data::ForumTopic::kGeneralId;
-				const auto realTopMsgId
-					= (replyTo.topicRootId == kGeneralId)
-					? MsgId(0)
-					: replyTo.topicRootId;
-				auto flags = sendFlags;
-				if (realTopMsgId) {
-					flags |= Flag::f_top_msg_id;
-				} else {
-					flags &= ~Flag::f_top_msg_id;
-				}
-				auto randoms = QVector<MTPlong>(msgCount);
-				for (auto &value : randoms) {
-					value = base::RandomValue<MTPlong>();
-				}
-				return MTPmessages_ForwardMessages(
-					MTP_flags(flags),
-					fromPeer->input(),
-					MTP_vector<MTPint>(mtpMsgIds),
-					MTP_vector<MTPlong>(randoms),
-					history->peer->input(),
-					MTP_int(realTopMsgId),
-					(sublistPeer
-						? MTP_inputReplyToMonoForum(
-							sublistPeer->input())
-						: MTPInputReplyTo()),
-					MTP_int(options.scheduled),
-					MTP_int(options.scheduleRepeatPeriod),
-					MTP_inputPeerEmpty(),
-					Data::ShortcutIdToMTP(
-						&history->session(),
-						options.shortcutId),
-					MTP_long(options.effectId),
-					MTP_int(videoTimestamp.value_or(0)),
-					MTP_long(starsPaid),
-					Api::SuggestToMTP(options.suggest));
+			const auto buildMessage = [=](int index, int starsPaid) {
+				const auto batchIds = mtpMsgIds.mid(
+					batchStarts[index],
+					batchStarts[index + 1] - batchStarts[index]);
+				const auto msgCount = int(batchIds.size());
+				return [=](
+						not_null<History*> history,
+						FullReplyTo replyTo)
+					-> Data::Histories::PreparedMessage {
+					const auto kGeneralId
+						= Data::ForumTopic::kGeneralId;
+					const auto realTopMsgId
+						= (replyTo.topicRootId == kGeneralId)
+						? MsgId(0)
+						: replyTo.topicRootId;
+					auto flags = sendFlags
+						| (starsPaid ? Flag::f_allow_paid_stars : Flag());
+					if (realTopMsgId) {
+						flags |= Flag::f_top_msg_id;
+					} else {
+						flags &= ~Flag::f_top_msg_id;
+					}
+					auto randoms = QVector<MTPlong>(msgCount);
+					for (auto &value : randoms) {
+						value = base::RandomValue<MTPlong>();
+					}
+					return MTPmessages_ForwardMessages(
+						MTP_flags(flags),
+						fromPeer->input(),
+						MTP_vector<MTPint>(batchIds),
+						MTP_vector<MTPlong>(randoms),
+						history->peer->input(),
+						MTP_int(realTopMsgId),
+						(sublistPeer
+							? MTP_inputReplyToMonoForum(
+								sublistPeer->input())
+							: MTPInputReplyTo()),
+						MTP_int(options.scheduled
+							+ (stagger ? index * options.scheduledMediaInterval : 0)),
+						MTP_int(options.scheduleRepeatPeriod),
+						MTP_inputPeerEmpty(),
+						Data::ShortcutIdToMTP(
+							&history->session(),
+							options.shortcutId),
+						MTP_long(options.effectId),
+						MTP_int(videoTimestamp.value_or(0)),
+						MTP_long(starsPaid),
+						Api::SuggestToMTP(options.suggest));
+				};
 			};
 			const auto requestDone = [=](
 					const MTPUpdates &updates,
@@ -2029,21 +2047,27 @@ ShareBox::SubmitCallback ShareBox::DefaultForwardCallback(
 					}
 				}
 			};
-			const auto requestKey = ++state->nextRequestKey;
-			state->requests.insert(requestKey);
-			histories.sendPreparedMessage(
-				threadHistory,
-				FullReplyTo{ .topicRootId = topicRootId },
-				uint64(0),
-				std::move(buildMessage),
-				[=](const MTPUpdates &updates,
-						const MTP::Response &) {
-					requestDone(updates, requestKey);
-				},
-				[=](const MTP::Error &error,
-						const MTP::Response &) {
-					requestFail(error, requestKey);
-				});
+			for (auto index = 0; index != batchCount; ++index) {
+				const auto starsPaid = std::min(
+					peer->starsPerMessageChecked(),
+					options.starsApproved);
+				options.starsApproved -= starsPaid;
+				const auto requestKey = ++state->nextRequestKey;
+				state->requests.insert(requestKey);
+				histories.sendPreparedMessage(
+					threadHistory,
+					FullReplyTo{ .topicRootId = topicRootId },
+					uint64(0),
+					buildMessage(index, starsPaid),
+					[=](const MTPUpdates &updates,
+							const MTP::Response &) {
+						requestDone(updates, requestKey);
+					},
+					[=](const MTP::Error &error,
+							const MTP::Response &) {
+						requestFail(error, requestKey);
+					});
+			}
 		}
 		if (state->requests.empty()) {
 			if (show->valid()) {
@@ -2170,6 +2194,8 @@ void FastShareMessage(
 		.filterCallback = std::move(filterCallback),
 		.st = st,
 		.forwardOptions = {
+			.postsCount = int(
+				HistoryView::Controls::ForwardedPostStarts(items).size()),
 			.sendersCount = ItemsForwardSendersCount(items),
 			.captionsCount = ItemsForwardCaptionsCount(items),
 			.show = !hasOnlyForcedForwardedInfo

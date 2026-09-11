@@ -371,6 +371,9 @@ scheduleDateField: InputField(defaultInputField) {
 scheduleNotifyIconSize: 24px;
 scheduleNotifyTooltipShift: 5px;
 scheduleRepeatMargin: margins(0px, -4px, 0px, 10px);
+scheduleMediaIntervalMargin: margins(0px, 0px, 0px, 14px);
+scheduleMediaIntervalHeight: 44px;
+scheduleMediaIntervalSkip: 16px;
 
 muteBoxTimeField: InputField(scheduleDateField) {
 	textMargins: margins(0px, 0px, 0px, 0px);

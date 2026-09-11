@@ -128,6 +128,7 @@ public:
 		ShareBoxStyleOverrides st;
 		std::optional<TimeId> videoTimestamp;
 		struct {
+			int postsCount = 0;
 			int sendersCount = 0;
 			int captionsCount = 0;
 			bool show = false;

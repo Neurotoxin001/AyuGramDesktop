@@ -26,6 +26,8 @@ struct SendOptions {
 	PeerData *sendAs = nullptr;
 	TimeId scheduled = 0;
 	TimeId scheduleRepeatPeriod = 0;
+	int scheduledMediaInterval = 60 * 60;
+	bool staggerForwardedMessages = false;
 	BusinessShortcutId shortcutId = 0;
 	EffectId effectId = 0;
 	QByteArray stakeSeedHash;

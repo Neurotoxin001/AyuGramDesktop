@@ -90,6 +90,7 @@ struct PreparedFile {
 	TextWithTags caption;
 	QByteArray content;
 	int64 size = 0;
+	int scheduleOffset = 0;
 	std::unique_ptr<PreparedFileInformation> information;
 	std::unique_ptr<PreparedFile> videoCover;
 	QImage preview;

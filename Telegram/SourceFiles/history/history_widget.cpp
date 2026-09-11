@@ -5975,6 +5975,9 @@ SendMenu::Details HistoryWidget::sendButtonMenuDetails() const {
 
 SendMenu::Details HistoryWidget::sendButtonDefaultDetails() const {
 	auto result = sendMenuDetails();
+	result.forwardedMessagesCount = int(_forwardPanel->items().size());
+	result.forwardedPostsCount = int(
+		HistoryView::Controls::ForwardedPostStarts(_forwardPanel->items()).size());
 	if (!hasSendableContent() && !_previewDrawPreview) {
 		result.effectAllowed = false;
 	}
